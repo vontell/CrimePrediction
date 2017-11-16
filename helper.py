@@ -38,3 +38,17 @@ def get_day_of_week(date):
     dt = datetime(int(parts[2]), int(parts[0]), int(parts[1]))
     result[0,dt.weekday()] = 1
     return result
+
+def min_from_time(t):
+    comps = t.split(":")
+    morning = "AM" in t
+    comps[0] = 0 if int(comps[0]) == 12 else comps[0]
+    minutes = 0 if morning else 720
+    minutes += int(comps[0]) * 60
+    minutes += int(comps[1])
+    return minutes
+
+def time_from_min(minutes):
+    hours = int(minutes / 60)
+    mins = minutes % 60
+    return str(hours) + ":" + str(mins)
