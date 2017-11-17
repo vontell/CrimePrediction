@@ -51,4 +51,6 @@ def min_from_time(t):
 def time_from_min(minutes):
     hours = int(minutes / 60)
     mins = minutes % 60
+    if mins == 0:
+        mins = "00"
     return str(hours) + ":" + str(mins)
