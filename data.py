@@ -90,6 +90,55 @@ class CrimeLoader:
     def _save_full_crime_encoding(self, encoding):
         self.config["CH_crime_encoding"] = encoding
 
+    def _save_location_norm_info(self, locations):
+
+        ll_lat = float("inf")
+        ll_long = float("inf")
+        ur_lat = float("-inf")
+        ur_long = float("-inf")
+
+        for location in locations:
+            lat = location[0]
+            long = location[1]
+
+            if lat < ll_lat:
+                ll_lat = lat
+            elif lat > ur_lat:
+                ur_lat = lat
+
+            if long < ll_long:
+                ll_long = long
+            elif long > ur_long:
+                ur_long = long
+
+        self.config["location norm info"] = (ll_lat, ll_long, ur_lat, ur_long)
+
+    def _get_normed_location_from(self, location):
+        lat = location[0]
+        long = location[1]
+
+        comps = self.config["location norm info"]
+
+        lat = lat - comps[0]
+        long = long - comps[1]
+        lat = lat / (comps[2] - comps[0])
+        long = long / (comps[3] - comps[1])
+        return [lat, long]
+
+    def _get_location_from_norm(self, normed_location):
+        lat = normed_location[0]
+        long = normed_location[1]
+
+        comps = self.config["location norm info"]
+
+        lat = lat * (comps[2] - comps[0])
+        long = long * (comps[3] - comps[1])
+
+        lat = lat + comps[0]
+        long = long + comps[1]
+        return [lat, long]
+
+
     def _convert_crime_class_to_full_integer_CH(self, c):
         index = self.config["CH_crime_encoding"].index(c)
         result = np.zeros(len(self.config["CH_crime_encoding"]))
@@ -103,7 +152,7 @@ class CrimeLoader:
     def _get_decoder_from(self, comp_list):
 
         if "all" in comp_list:
-            comp_list = ["day", "time", "time min", "hour", "location", "crime condensed", "crime full"]
+            comp_list = ["day", "time", "time min", "hour", "location normalized", "crime condensed", "crime full"]
 
         def decode_result(result):
             inc = 0
@@ -127,6 +176,10 @@ class CrimeLoader:
             if "location" in comp_list:
                 latlong = result[inc:inc + 2]
                 results.append(latlong)
+                inc += 2
+            if "location normalized" in comp_list:
+                latlong = result[inc:inc + 2]
+                results.append(self._get_location_from_norm(latlong))
                 inc += 2
             if "crime condensed" in comp_list:
                 crime = result[inc:inc + 9]
@@ -198,6 +251,7 @@ class CrimeLoader:
 
         self.results = all_data
         self._save_full_crime_encoding(list(set([i.crime for i in self.results["CH"][0]])))
+        self._save_location_norm_info([i.location for i in self.results["CH"][0]])
         print("Finished loading data")
         return
 
@@ -255,6 +309,8 @@ class Crime:
         if "location" in comp_list:
             others = np.array([self.location[0], self.location[1]])
             feature = np.concatenate((feature, others))
+        if "location normalized":
+            feature = np.concatenate((feature, self.context._get_normed_location_from(self.location)))
         if "crime condensed" in comp_list:
             feature = np.concatenate((feature, self.context._convert_crime_class_to_condensed_integer_CH(self.crime)))
         if "crime full" in comp_list:
@@ -271,8 +327,8 @@ if __name__ == "__main__":
     data = CrimeLoader()
     data.load_data(force_refresh=True)
 
-    X_features = ["all"]
-    Y_features = ["crime condensed"]
+    X_features = ["location", "location normalized"]
+    Y_features = ["location", "location normalized"]
     X, Y, X_decoder, Y_decoder = data.get_workable_data(X_features, Y_features)
     print("Featurization achieved")
     print(X[0])
