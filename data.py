@@ -168,8 +168,7 @@ class CrimeLoader:
     def _get_decoder_from(self, comp_list):
 
         if "all" in comp_list:
-            comp_list = ["day", "time", "time min", "hour", "location normalized", "crime condensed", "crime full",
-                         "neighborhood"]
+            comp_list = ["day", "time", "time min", "hour", "location normalized", "crime condensed", "crime full", "below poverty count"]
 
         def decode_result(result):
             inc = 0
@@ -213,8 +212,7 @@ class CrimeLoader:
                 inc += self.results["CH_social"][1]
             if "below poverty count" in comp_list:
                 b_pov = result[inc:inc + 1]
-                print("b", b_pov)
-                results.append([b_pov])
+                results.append(b_pov[0])
                 inc += 1
 
             return results
@@ -346,7 +344,7 @@ class Crime:
         '''
 
         if "all" in comp_list:
-            comp_list = ["day", "time", "time min", "hour", "location", "crime condensed", "crime full"]
+            comp_list = ["day", "time", "time min", "hour", "location", "crime condensed", "crime full", "below poverty count"]
 
         feature = np.array([])
         if "day" in comp_list:
@@ -355,7 +353,6 @@ class Crime:
             feature = np.append(feature, self.time_of_day[0])
         if "time min" in comp_list:
             time = np.array(min_from_time(self.raw_time))
-            print(time)
             feature = np.concatenate((feature, [time]))
         if "hour" in comp_list:
             hour = np.array(int(int(min_from_time(self.raw_time)) / 60))
@@ -376,10 +373,8 @@ class Crime:
         if "below poverty count" in comp_list:
             index = self.context._get_closest_neighborhood_index(self.location)
             pov_below = float(self.context.results["CH_social"][0][index][4])
-            print(pov_below)
             feature = np.concatenate((feature, np.array([pov_below])))
 
-        print(feature)
         return feature
 
     def __str__(self):
@@ -398,4 +393,3 @@ if __name__ == "__main__":
     print(X[0])
     print(X_decoder(X[0]))
     print(Y_decoder(Y[0]))
-    print(data.results["CH_social"])
