@@ -214,6 +214,22 @@ class CrimeLoader:
                 b_pov = result[inc:inc + 1]
                 results.append(b_pov[0])
                 inc += 1
+            if "crowded" in comp_list:
+                crowd = result[inc:inc + 1]
+                results.append(crowd[0])
+                inc += 1
+            if "no diploma" in comp_list:
+                dip = result[inc:inc + 1]
+                results.append(dip[0])
+                inc += 1
+            if "income" in comp_list:
+                ind = result[inc:inc + 1]
+                results.append(ind[0])
+                inc += 1
+            if "unemployment" in comp_list:
+                une = result[inc:inc + 1]
+                results.append(une[0])
+                inc += 1
 
             return results
 
@@ -374,6 +390,22 @@ class Crime:
             index = self.context._get_closest_neighborhood_index(self.location)
             pov_below = float(self.context.results["CH_social"][0][index][4])
             feature = np.concatenate((feature, np.array([pov_below])))
+        if "crowded" in comp_list:
+            index = self.context._get_closest_neighborhood_index(self.location)
+            crowd = float(self.context.results["CH_social"][0][index][5])
+            feature = np.concatenate((feature, np.array([crowd])))
+        if "no diploma" in comp_list:
+            index = self.context._get_closest_neighborhood_index(self.location)
+            dip = float(self.context.results["CH_social"][0][index][7])
+            feature = np.concatenate((feature, np.array([dip])))
+        if "income" in comp_list:
+            index = self.context._get_closest_neighborhood_index(self.location)
+            dip = float(self.context.results["CH_social"][0][index][8])
+            feature = np.concatenate((feature, np.array([dip])))
+        if "unemployment" in comp_list:
+            index = self.context._get_closest_neighborhood_index(self.location)
+            dip = float(self.context.results["CH_social"][0][index][9])
+            feature = np.concatenate((feature, np.array([dip])))
 
         return feature
 
@@ -386,7 +418,7 @@ if __name__ == "__main__":
     data = CrimeLoader()
     data.load_data(force_refresh=True, data_limit=10)
 
-    X_features = ["all"]
+    X_features = ["no diploma", "unemployment", "income"]
     Y_features = ["below poverty count"]
     X, Y, X_decoder, Y_decoder = data.get_workable_data(X_features, Y_features)
     print("Featurization achieved")
