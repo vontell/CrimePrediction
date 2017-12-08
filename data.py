@@ -14,6 +14,7 @@ class CrimeLoader:
             "root_data": "data/",
             "LA_crime": "crime-in-los-angeles/Crime_Data_2010_2017.csv",
             "CH_crime": "crimes-in-chicago/Chicago_Crimes_2012_to_2017.csv",
+            "CH_social": "chicago_poverty_and_crime.csv",
             "CH_schema": self._chicago_from,
             "CH_condensed_crime_encoding": {
                 'KIDNAPPING': 0,
@@ -138,6 +139,21 @@ class CrimeLoader:
         long = long + comps[1]
         return [lat, long]
 
+    def _get_closest_neighborhood_index(self, location):
+
+        # Take note that this uses a flat earth assumption O.O
+
+        neighs = self.results["CH_social"][0]
+        distance = float("inf")
+        neigh = None
+        for i in range(len(neighs)):
+            n = neighs[i]
+            dist = ((location[0] - float(n[-2]))**2 + (location[1] - float(n[-1]))**2 )**(1.0/2.0)
+            if neigh is None or dist < distance:
+                distance = dist
+                neigh = i
+
+        return neigh
 
     def _convert_crime_class_to_full_integer_CH(self, c):
         index = self.config["CH_crime_encoding"].index(c)
@@ -152,7 +168,8 @@ class CrimeLoader:
     def _get_decoder_from(self, comp_list):
 
         if "all" in comp_list:
-            comp_list = ["day", "time", "time min", "hour", "location normalized", "crime condensed", "crime full"]
+            comp_list = ["day", "time", "time min", "hour", "location normalized", "crime condensed", "crime full",
+                         "neighborhood"]
 
         def decode_result(result):
             inc = 0
@@ -189,6 +206,16 @@ class CrimeLoader:
                 crime = result[inc:inc + len(self.config["CH_crime_encoding"])]
                 results.append(self._convert_one_hot_full_encoding_to_crime_class_CH(crime))
                 inc += len(self.config["CH_crime_encoding"])
+            if "neighborhood" in comp_list:
+                neigh = result[inc:inc + self.results["CH_social"][1]]
+                index = np.argmax(neigh > 0)
+                results.append(self.results["CH_social"][0][index][1])
+                inc += self.results["CH_social"][1]
+            if "below poverty count" in comp_list:
+                b_pov = result[inc:inc + 1]
+                print("b", b_pov)
+                results.append([b_pov])
+                inc += 1
 
             return results
 
@@ -198,11 +225,13 @@ class CrimeLoader:
 
         if not force_refresh:
             try:
+                print("Loading existing pickled crimes")
                 result = pickle.load(open("crime_data.p", "rb"))
                 if result:
                     print("Loaded crime data from pickle file")
                     self.results = result
                     self._save_full_crime_encoding(list(set([i.crime for i in self.results["CH"][0]])))
+                    self._save_location_norm_info([i.location for i in self.results["CH"][0]])
                     return
             except:
                 print("Creating checkpoint for crimes")
@@ -227,7 +256,7 @@ class CrimeLoader:
                 if randomize:
                     np.random.shuffle(content)
 
-                # Shrink if requestedt
+                # Shrink if requested
                 if data_limit is not None:
                     content = content[0:data_limit]
 
@@ -245,14 +274,38 @@ class CrimeLoader:
                 # Save the number of errored rows
                 all_data[city].append(count)
 
-        if force_save:
-            print("Saving checkpoint")
-            pickle.dump(all_data, open("crime_data.p", "wb"))
-
         self.results = all_data
         self._save_full_crime_encoding(list(set([i.crime for i in self.results["CH"][0]])))
         self._save_location_norm_info([i.location for i in self.results["CH"][0]])
-        print("Finished loading data")
+        print("Finished loading crime data")
+
+        print("Now loading social / economics data")
+        print("WARNING: THIS IS HARDCODED TO WORK WITH CHICAGO ONLY")
+
+        data_file = self.config["root_data"] + self.config["CH_social"]
+        with open(data_file) as csvfile:
+            content = csvfile.readlines()
+            content = [x.strip() for x in content]
+            del content[0]  # Remove the header
+            all_data["CH_social"] = []
+            all_data["CH_social"].append([])
+
+            # Save the number of possible rows available
+            all_data["CH_social"].append(len(content))
+
+            for row in content:
+                d = row.split(",")
+                all_data["CH_social"][0].append(d)
+
+        self.results = all_data
+
+        print("Finished loading Chicago social data")
+
+        if force_save:
+            print("Saving checkpoint")
+            pickle.dump(all_data, open("crime_data.p", "wb"))
+            print("Finished saving!")
+
         return
 
     def get_workable_data(self, X_comps, Y_comps):
@@ -302,6 +355,7 @@ class Crime:
             feature = np.append(feature, self.time_of_day[0])
         if "time min" in comp_list:
             time = np.array(min_from_time(self.raw_time))
+            print(time)
             feature = np.concatenate((feature, [time]))
         if "hour" in comp_list:
             hour = np.array(int(int(min_from_time(self.raw_time)) / 60))
@@ -309,13 +363,23 @@ class Crime:
         if "location" in comp_list:
             others = np.array([self.location[0], self.location[1]])
             feature = np.concatenate((feature, others))
-        if "location normalized":
+        if "location normalized" in comp_list:
             feature = np.concatenate((feature, self.context._get_normed_location_from(self.location)))
         if "crime condensed" in comp_list:
             feature = np.concatenate((feature, self.context._convert_crime_class_to_condensed_integer_CH(self.crime)))
         if "crime full" in comp_list:
             feature = np.concatenate((feature, self.context._convert_crime_class_to_full_integer_CH(self.crime)))
+        if "neighborhood" in comp_list:
+            neigh_array = np.array([0]*self.context.results["CH_social"][1])
+            neigh_array[self.context._get_closest_neighborhood_index(self.location)] = 1
+            feature = np.concatenate((feature, neigh_array))
+        if "below poverty count" in comp_list:
+            index = self.context._get_closest_neighborhood_index(self.location)
+            pov_below = float(self.context.results["CH_social"][0][index][4])
+            print(pov_below)
+            feature = np.concatenate((feature, np.array([pov_below])))
 
+        print(feature)
         return feature
 
     def __str__(self):
@@ -325,12 +389,13 @@ class Crime:
 if __name__ == "__main__":
 
     data = CrimeLoader()
-    data.load_data(force_refresh=True)
+    data.load_data(force_refresh=True, data_limit=10)
 
-    X_features = ["location", "location normalized"]
-    Y_features = ["location", "location normalized"]
+    X_features = ["all"]
+    Y_features = ["below poverty count"]
     X, Y, X_decoder, Y_decoder = data.get_workable_data(X_features, Y_features)
     print("Featurization achieved")
     print(X[0])
     print(X_decoder(X[0]))
     print(Y_decoder(Y[0]))
+    print(data.results["CH_social"])
