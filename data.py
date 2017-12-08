@@ -400,7 +400,7 @@ class Crime:
             feature = np.concatenate((feature, np.array([dip])))
         if "income" in comp_list:
             index = self.context._get_closest_neighborhood_index(self.location)
-            dip = float(self.context.results["CH_social"][0][index][8])
+            dip = float(self.context.results["CH_social"][0][index][11])
             feature = np.concatenate((feature, np.array([dip])))
         if "unemployment" in comp_list:
             index = self.context._get_closest_neighborhood_index(self.location)
